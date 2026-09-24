@@ -1,0 +1,40 @@
+# Terraform / Azure project ignore rules
+
+# Terraform working directories and downloaded providers
+**/.terraform/**
+
+# Terraform state and state backups (may contain secrets)
+*.tfstate
+*.tfstate.*
+errored.tfstate
+
+# Terraform plans (may contain sensitive values)
+*.tfplan
+*.plan
+
+# Variable files can contain environment-specific or secret values
+*.tfvars
+*.tfvars.json
+
+# Local certificates and private keys
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

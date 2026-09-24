@@ -1,0 +1,35 @@
+#cloud-config
+package_update: true
+
+packages:
+  - nginx
+
+write_files:
+  - path: /var/www/html/index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Enterprise Web Application</title>
+      </head>
+      <body>
+        <h1>Enterprise Web Application</h1>
+        <h2>Application Server</h2>
+
+        <p><strong>Environment:</strong> DEV</p>
+        <p><strong>Server:</strong> app-server-01</p>
+        <p><strong>Status:</strong> HEALTHY</p>
+
+        <p>Application is running normally.</p>
+      </body>
+      </html>
+
+  - path: /var/www/html/health
+    content: |
+      OK
+
+runcmd:
+  - systemctl enable nginx
+  - systemctl start nginx

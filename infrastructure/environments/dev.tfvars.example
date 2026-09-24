@@ -1,0 +1,139 @@
+resource_groups = {
+  network = {
+    name     = "rg-enterprise-web-network"
+    location = "West Europe"
+  }
+  public = {
+    name     = "rg-enterprise-web-public"
+    location = "West Europe"
+  }
+}
+
+vnet_details = {
+  enterprise_web_vnet = {
+    name          = "vnet-enterprise-web"
+    address_space = ["10.0.0.0/16"]
+  }
+}
+
+subnet_details = {
+  web_subnet = {
+    name             = "subnet-web-01"
+    address_prefixes = ["10.0.1.0/24"]
+  }
+  app_subnet = {
+    name             = "subnet-app-01"
+    address_prefixes = ["10.0.2.0/24"]
+  }
+  app_gateway = {
+    name             = "subnet-app-gateway-01"
+    address_prefixes = ["10.0.3.0/24"]
+  }
+}
+
+nsg_rules = {
+  app_gateway = {
+    allow_gateway_manager = {
+      priority                   = 105
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_address_prefix      = "Internet"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "65200-65535"
+    }
+    allow_https = {
+      priority                   = 110
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_address_prefix      = "Internet"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "443"
+    }
+    deny_all = {
+      priority                   = 120
+      direction                  = "Inbound"
+      access                     = "Deny"
+      protocol                   = "*"
+      source_address_prefix      = "*"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "*"
+    }
+  }
+  web_subnet = {
+    allow_app_gateway = {
+      priority                   = 110
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_subnet              = "app_gateway"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "80"
+    }
+    deny_all = {
+      priority                   = 120
+      direction                  = "Inbound"
+      access                     = "Deny"
+      protocol                   = "*"
+      source_address_prefix      = "*"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "*"
+    }
+  }
+  app_subnet = {
+    allow_web = {
+      priority                   = 110
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_subnet              = "web_subnet"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "80"
+    }
+    deny_all = {
+      priority                   = 120
+      direction                  = "Inbound"
+      access                     = "Deny"
+      protocol                   = "*"
+      source_address_prefix      = "*"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "*"
+    }
+  }
+}
+
+app_vm = {
+  app_server = {
+    name                  = "app-server-01"
+    size                  = "Standard_D2s_v3"
+    admin_username        = "adminuser"
+    private_ip_allocation = "Dynamic"
+  }
+}
+
+
+web_vmss = {
+  name           = "web-vmss-01"
+  sku            = "Standard_D2s_v3"
+  instances      = 2
+  admin_username = "adminuser"
+  autoscale_min  = 2
+  autoscale_max  = 5
+  image_sku      = "22_04-lts"
+}
+
+
+workspace_name = "law-enterprise-web-dev"
+
+ssl_certificate_path = "./certs/REPLACE_WITH_LOCAL_PFX.pfx"
+
+
+environment = "dev"
