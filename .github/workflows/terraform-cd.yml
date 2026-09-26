@@ -32,8 +32,19 @@ jobs:
         working-directory: infrastructure
         run: terraform init -reconfigure -backend-config="key=dev.terraform.tfstate"
 
+      - name: Prepare Terraform files
+        working-directory: infrastructure
+        env:
+          PFX_BASE64: ${{ secrets.SSL_CERTIFICATE_PFX_BASE64 }}
+        run: |
+          cp environments/dev.tfvars.example environments/dev.tfvars
+          mkdir -p certs
+          printf '%s' "$PFX_BASE64" | base64 --decode > certs/app-gateway-01.pfx
+          sed -i 's#./certs/REPLACE_WITH_LOCAL_PFX.pfx#./certs/app-gateway-01.pfx#' environments/dev.tfvars
+
       - name: Terraform Plan
         working-directory: infrastructure
         env:
           TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
         run: terraform plan -var-file="environments/dev.tfvars"
