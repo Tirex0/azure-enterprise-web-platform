@@ -1,0 +1,36 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    name: Terraform Checks
+    runs-on: ubuntu-latest
+
+    env:
+      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        working-directory: infrastructure
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: infrastructure
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: infrastructure
+        run: terraform validate

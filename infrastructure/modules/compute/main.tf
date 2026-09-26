@@ -26,7 +26,7 @@ resource "azurerm_linux_virtual_machine" "app_vm" {
 
   admin_ssh_key {
     username   = var.app_vm["app_server"].admin_username
-    public_key = file("~/.ssh/id_ed25519.pub")
+    public_key = var.ssh_public_key
   }
 
   os_disk {
@@ -68,7 +68,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "web_server_scale_set" {
 
   admin_ssh_key {
     username   = var.web_vmss.admin_username
-    public_key = file("~/.ssh/id_ed25519.pub")
+    public_key = var.ssh_public_key
   }
 
   source_image_reference {

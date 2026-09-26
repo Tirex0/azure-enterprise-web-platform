@@ -43,3 +43,8 @@ variable "application_gateway_backend_address_pool_ids" {
   description = "List of backend address pool IDs for the application gateway."
   default     = []
 }
+
+variable "ssh_public_key" {
+  description = "SSH public key used to access Linux virtual machines."
+  type        = string
+}
