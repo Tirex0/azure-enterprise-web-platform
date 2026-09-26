@@ -26,9 +26,9 @@ module "compute" {
   app_subnet_id = module.networking.subnet_ids["app_subnet"]
   web_subnet_id = module.networking.subnet_ids["web_subnet"]
 
-  app_vm   = var.app_vm
-  web_vmss = var.web_vmss
-
+  app_vm         = var.app_vm
+  web_vmss       = var.web_vmss
+  ssh_public_key = var.ssh_public_key
   application_gateway_backend_address_pool_ids = [
     module.application_gateway.backend_address_pool_id
   ]
