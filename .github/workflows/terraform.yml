@@ -30,4 +30,6 @@ jobs:
 
       - name: Terraform Validate
         working-directory: infrastructure
+        env:
+          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
         run: terraform validate
