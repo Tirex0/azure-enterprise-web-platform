@@ -41,7 +41,7 @@ nsg_rules = {
       direction                  = "Inbound"
       access                     = "Allow"
       protocol                   = "Tcp"
-      source_address_prefix      = "Internet"
+      source_address_prefix      = "GatewayManager"
       source_port_range          = "*"
       destination_address_prefix = "*"
       destination_port_range     = "65200-65535"
@@ -56,6 +56,17 @@ nsg_rules = {
       source_port_range          = "*"
       destination_address_prefix = "*"
       destination_port_range     = "443"
+    }
+
+    allow_azure_load_balancer = {
+      priority                   = 115
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "*"
+      source_address_prefix      = "AzureLoadBalancer"
+      source_port_range          = "*"
+      destination_address_prefix = "*"
+      destination_port_range     = "*"
     }
 
     deny_all = {
@@ -134,13 +145,12 @@ web_vmss = {
   instances      = 1
   admin_username = "adminuser"
   autoscale_min  = 1
-  autoscale_max  = 5
+  autoscale_max  = 1
   image_sku      = "22_04-lts-gen2"
 }
 
 workspace_name = "law-enterprise-web-prod"
 
 ssl_certificate_path = "./certs/REPLACE_WITH_LOCAL_PFX.pfx"
-
 
 environment = "prod"
