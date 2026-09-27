@@ -11,6 +11,8 @@
   The Application VM does not have a public IP address and can only receive traffic from the Web tier. The infrastructure uses dedicated subnets for the Application Gateway, Web tier, and Application tier.
   This design provides a clear separation between the public entry point and the backend application components while allowing the Web tier to scale independently.
 
+  ![Azure Enterprise Web Platform Architecture](Infrastructure_Diagram.png)
+
 **3. Infrastructure**
    
   The Azure infrastructure consists of an Application Gateway, Virtual Machine Scale Set, private Application VM, Virtual Network, dedicated subnets, and Network Security Groups.
