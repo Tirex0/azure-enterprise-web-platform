@@ -11,6 +11,7 @@ errored.tfstate
 # Terraform plans (may contain sensitive values)
 *.tfplan
 *.plan
+**/plan*.json
 
 # Variable files can contain environment-specific or secret values
 *.tfvars
