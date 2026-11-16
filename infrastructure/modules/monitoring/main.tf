@@ -1,5 +1,5 @@
 data "azurerm_resource_group" "sharedservices" {
-  name = "sharedservices-rg"
+  name = var.sharedservices_resource_group_name
 }
 
 resource "azurerm_log_analytics_workspace" "log_analytics_main" {
@@ -7,7 +7,9 @@ resource "azurerm_log_analytics_workspace" "log_analytics_main" {
   location            = data.azurerm_resource_group.sharedservices.location
   resource_group_name = data.azurerm_resource_group.sharedservices.name
   sku                 = "PerGB2018"
-  retention_in_days   = 30
+  retention_in_days   = 90
+
+  internet_query_access_type = "Disabled"
 }
 
 resource "azurerm_monitor_data_collection_rule" "enterprise_web" {
@@ -43,9 +45,35 @@ resource "azurerm_monitor_data_collection_rule_association" "app_vm" {
   data_collection_rule_id = azurerm_monitor_data_collection_rule.enterprise_web.id
 }
 
-
 resource "azurerm_monitor_data_collection_rule_association" "web_vmss" {
   name                    = "web-vmss-dcr-association"
   target_resource_id      = var.web_vmss_id
   data_collection_rule_id = azurerm_monitor_data_collection_rule.enterprise_web.id
+}
+
+data "azurerm_monitor_diagnostic_categories" "app_gateway" {
+  resource_id = var.app_gateway_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "app_gateway" {
+  name                           = "diag-app-gateway-${var.environment}"
+  target_resource_id             = var.app_gateway_id
+  log_analytics_workspace_id     = azurerm_log_analytics_workspace.log_analytics_main.id
+  log_analytics_destination_type = "Dedicated"
+
+  dynamic "enabled_log" {
+    for_each = data.azurerm_monitor_diagnostic_categories.app_gateway.log_category_types
+
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  dynamic "enabled_metric" {
+    for_each = data.azurerm_monitor_diagnostic_categories.app_gateway.metrics
+
+    content {
+      category = enabled_metric.value
+    }
+  }
 }

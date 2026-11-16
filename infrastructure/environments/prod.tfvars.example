@@ -4,11 +4,9 @@ resource_groups = {
     location = "West Europe"
   }
 
-  public = {
-    name     = "rg-enterprise-web-prod-public"
-    location = "West Europe"
-  }
 }
+
+sharedservices_resource_group_name = "sharedservices-rg"
 
 vnet_details = {
   enterprise_web_vnet = {
@@ -19,23 +17,34 @@ vnet_details = {
 
 subnet_details = {
   web_subnet = {
-    name             = "subnet-web-prod-01"
-    address_prefixes = ["10.1.1.0/24"]
+    name                            = "subnet-web-prod-01"
+    address_prefixes                = ["10.1.1.0/24"]
+    default_outbound_access_enabled = false
   }
-
   app_subnet = {
-    name             = "subnet-app-prod-01"
-    address_prefixes = ["10.1.2.0/24"]
+    name                            = "subnet-app-prod-01"
+    address_prefixes                = ["10.1.2.0/24"]
+    default_outbound_access_enabled = false
   }
-
   app_gateway = {
     name             = "subnet-app-gateway-prod-01"
     address_prefixes = ["10.1.3.0/24"]
   }
 }
 
+
 nsg_rules = {
   app_gateway = {
+    allow_internet_outbound = {
+      priority                   = 105
+      direction                  = "Outbound"
+      access                     = "Allow"
+      protocol                   = "*"
+      source_address_prefix      = "*"
+      source_port_range          = "*"
+      destination_address_prefix = "Internet"
+      destination_port_range     = "*"
+    }
     allow_gateway_manager = {
       priority                   = 105
       direction                  = "Inbound"
@@ -46,7 +55,6 @@ nsg_rules = {
       destination_address_prefix = "*"
       destination_port_range     = "65200-65535"
     }
-
     allow_https = {
       priority                   = 110
       direction                  = "Inbound"
@@ -57,7 +65,6 @@ nsg_rules = {
       destination_address_prefix = "*"
       destination_port_range     = "443"
     }
-
     allow_azure_load_balancer = {
       priority                   = 115
       direction                  = "Inbound"
@@ -68,7 +75,6 @@ nsg_rules = {
       destination_address_prefix = "*"
       destination_port_range     = "*"
     }
-
     deny_all = {
       priority                   = 120
       direction                  = "Inbound"
@@ -142,10 +148,10 @@ app_vm = {
 web_vmss = {
   name           = "web-vmss-prod-01"
   sku            = "Standard_D2s_v6"
-  instances      = 1
+  instances      = 2
   admin_username = "adminuser"
-  autoscale_min  = 1
-  autoscale_max  = 1
+  autoscale_min  = 2
+  autoscale_max  = 5
   image_sku      = "22_04-lts-gen2"
 }
 

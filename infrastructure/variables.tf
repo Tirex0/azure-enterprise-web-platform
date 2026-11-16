@@ -1,11 +1,15 @@
 variable "resource_groups" {
-  description = "Values of resources groups needed for the configuration"
+  description = "Resource groups used by the configuration."
   type = map(object({
     name     = string
     location = string
   }))
 }
 
+variable "sharedservices_resource_group_name" {
+  description = "Existing resource group for shared monitoring services."
+  type        = string
+}
 
 variable "vnet_details" {
   type = map(object({
@@ -14,14 +18,13 @@ variable "vnet_details" {
   }))
 }
 
-
 variable "subnet_details" {
   type = map(object({
-    name             = string
-    address_prefixes = list(string)
+    name                            = string
+    address_prefixes                = list(string)
+    default_outbound_access_enabled = optional(bool)
   }))
 }
-
 
 variable "nsg_rules" {
   type = map(map(object({
@@ -36,7 +39,6 @@ variable "nsg_rules" {
     destination_port_range     = string
   })))
 }
-
 
 variable "app_vm" {
   type = map(object({
@@ -61,7 +63,7 @@ variable "web_vmss" {
 
 variable "workspace_name" {
   type        = string
-  description = "Name of the Log Analytics Workspace declared as an input variable for reusability purposes."
+  description = "Name of the Log Analytics Workspace."
 }
 
 variable "ssl_certificate_path" {

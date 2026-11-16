@@ -10,16 +10,17 @@ resource "azurerm_network_interface" "app_vm_nic" {
   }
 }
 
-
 resource "azurerm_linux_virtual_machine" "app_vm" {
-  name                = var.app_vm["app_server"].name
-  resource_group_name = var.resource_group_name
-  location            = var.resource_group_location
-  size                = var.app_vm["app_server"].size
-  admin_username      = var.app_vm["app_server"].admin_username
+  name                            = var.app_vm["app_server"].name
+  resource_group_name             = var.resource_group_name
+  location                        = var.resource_group_location
+  size                            = var.app_vm["app_server"].size
+  admin_username                  = var.app_vm["app_server"].admin_username
+  disable_password_authentication = true
   network_interface_ids = [
     azurerm_network_interface.app_vm_nic.id,
   ]
+
   identity {
     type = "SystemAssigned"
   }
@@ -41,7 +42,12 @@ resource "azurerm_linux_virtual_machine" "app_vm" {
     version   = "latest"
   }
 
-  custom_data = filebase64("${path.module}/cloud-init-app.yaml")
+  custom_data = base64encode(
+    templatefile("${path.module}/cloud-init-app.yaml.tftpl", {
+      environment     = upper(var.environment)
+      app_server_name = var.app_vm["app_server"].name
+    })
+  )
 }
 
 resource "azurerm_virtual_machine_extension" "app_vm_ama" {
@@ -53,14 +59,14 @@ resource "azurerm_virtual_machine_extension" "app_vm_ama" {
   auto_upgrade_minor_version = true
 }
 
-
 resource "azurerm_linux_virtual_machine_scale_set" "web_server_scale_set" {
-  name                = var.web_vmss.name
-  resource_group_name = var.resource_group_name
-  location            = var.resource_group_location
-  sku                 = var.web_vmss.sku
-  instances           = var.web_vmss.instances
-  admin_username      = var.web_vmss.admin_username
+  name                            = var.web_vmss.name
+  resource_group_name             = var.resource_group_name
+  location                        = var.resource_group_location
+  sku                             = var.web_vmss.sku
+  instances                       = var.web_vmss.instances
+  admin_username                  = var.web_vmss.admin_username
+  disable_password_authentication = true
 
   identity {
     type = "SystemAssigned"
@@ -94,8 +100,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "web_server_scale_set" {
 
       application_gateway_backend_address_pool_ids = var.application_gateway_backend_address_pool_ids
     }
-
   }
+
   custom_data = base64encode(
     templatefile("${path.module}/cloud-init-web.yaml.tftpl", {
       app_vm_private_ip = azurerm_network_interface.app_vm_nic.private_ip_address
@@ -108,7 +114,6 @@ resource "azurerm_linux_virtual_machine_scale_set" "web_server_scale_set" {
     ]
   }
 }
-
 
 resource "azurerm_virtual_machine_scale_set_extension" "web_vmss_ama" {
   name                         = "AzureMonitorLinuxAgent"

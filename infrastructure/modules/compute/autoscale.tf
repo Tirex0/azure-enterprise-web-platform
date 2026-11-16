@@ -22,7 +22,7 @@ resource "azurerm_monitor_autoscale_setting" "web_vmss_autoscale" {
         time_window        = "PT5M"
         time_aggregation   = "Average"
         operator           = "GreaterThan"
-        threshold          = 30
+        threshold          = 70
       }
 
       scale_action {

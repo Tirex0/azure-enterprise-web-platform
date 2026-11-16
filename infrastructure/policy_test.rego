@@ -2,23 +2,31 @@ package policy_test
 
 import data.terraform.security as security
 
-test_public_ip_not_standard_deny if {
+test_nonstandard_public_ip_is_denied if {
 	result := security.deny with input as {
 		"resource_changes": [{
 			"address": "azurerm_public_ip.test",
 			"type": "azurerm_public_ip",
-			"change": {
-				"after": {
-					"sku": "Basic",
-				},
-			},
+			"change": {"after": {"sku": "Basic"}},
 		}],
 	}
 
 	result == {"azurerm_public_ip.test uses a non-Standard SKU"}
 }
 
-test_inbound_ssh_deny if {
+test_standard_public_ip_is_allowed if {
+	result := security.deny with input as {
+		"resource_changes": [{
+			"address": "azurerm_public_ip.test",
+			"type": "azurerm_public_ip",
+			"change": {"after": {"sku": "Standard"}},
+		}],
+	}
+
+	count(result) == 0
+}
+
+test_inbound_ssh_from_internet_is_denied if {
 	result := security.deny with input as {
 		"resource_changes": [{
 			"address": "azurerm_network_security_group.test",
@@ -36,10 +44,11 @@ test_inbound_ssh_deny if {
 			},
 		}],
 	}
+
 	result == {"azurerm_network_security_group.test allows inbound SSH access from the Internet"}
 }
 
-test_inbound_allow_all_deny if {
+test_inbound_allow_from_anywhere_is_denied if {
 	result := security.deny with input as {
 		"resource_changes": [{
 			"address": "azurerm_network_security_group.test",
@@ -55,11 +64,11 @@ test_inbound_allow_all_deny if {
 			},
 		}],
 	}
+
 	result == {"azurerm_network_security_group.test allows inbound access from any source"}
 }
 
-#Írj egy deny policy-t, amely jelez, ha egy azurerm_linux_virtual_machine_scale_set esetén a password authentication nincs letiltva.
-test_pw_auth_not_blocked if {
+test_password_authentication_is_denied if {
 	result := security.deny with input as {
 		"planned_values": {
 			"root_module": {
@@ -67,21 +76,35 @@ test_pw_auth_not_blocked if {
 					"resources": [{
 						"address": "azurerm_linux_virtual_machine_scale_set.test",
 						"type": "azurerm_linux_virtual_machine_scale_set",
-						"values": {
-							"disable_password_authentication": false,
-						},
+						"values": {"disable_password_authentication": false},
 					}],
 				}],
 			},
 		},
 	}
 
-	result == {
-		"azurerm_linux_virtual_machine_scale_set.test allows password authentication, which is prohibited.",
-	}
+	result == {"azurerm_linux_virtual_machine_scale_set.test allows password authentication, which is prohibited"}
 }
 
-test_lg_wp_internet_query_enabled if {
+test_linux_virtual_machine_password_authentication_is_denied if {
+	result := security.deny with input as {
+		"planned_values": {
+			"root_module": {
+				"child_modules": [{
+					"resources": [{
+						"address": "module.compute.azurerm_linux_virtual_machine.app_vm",
+						"type": "azurerm_linux_virtual_machine",
+						"values": {"disable_password_authentication": false},
+					}],
+				}],
+			},
+		},
+	}
+
+	result == {"module.compute.azurerm_linux_virtual_machine.app_vm allows password authentication, which is prohibited"}
+}
+
+test_log_analytics_public_query_is_denied if {
 	result := security.deny with input as {
 		"planned_values": {
 			"root_module": {
@@ -91,16 +114,18 @@ test_lg_wp_internet_query_enabled if {
 						"type": "azurerm_log_analytics_workspace",
 						"values": {
 							"internet_query_access_type": "Enabled",
+							"retention_in_days": 90,
 						},
 					}],
 				}],
 			},
 		},
 	}
-	result == {"azurerm_log_analytics_workspace.test resource has internet_query_access_type Enabled"}
+
+	result == {"azurerm_log_analytics_workspace.test has Log Analytics internet query access enabled"}
 }
 
-test_lg_wp_retention_days if {
+test_log_analytics_short_retention_is_denied if {
 	result := security.deny with input as {
 		"planned_values": {
 			"root_module": {
@@ -109,6 +134,7 @@ test_lg_wp_retention_days if {
 						"address": "azurerm_log_analytics_workspace.test",
 						"type": "azurerm_log_analytics_workspace",
 						"values": {
+							"internet_query_access_type": "Disabled",
 							"retention_in_days": 30,
 						},
 					}],
@@ -116,10 +142,11 @@ test_lg_wp_retention_days if {
 			},
 		},
 	}
-	result == {"azurerm_log_analytics_workspace.test Log Analytics Workspace has a retention in days limit below 31"}
+
+	result == {"azurerm_log_analytics_workspace.test Log Analytics Workspace retention must be greater than 30 days"}
 }
 
-test_app_gateway_http_listener_deny if {
+test_application_gateway_http_listener_is_denied if {
 	result := security.deny with input as {
 		"planned_values": {
 			"root_module": {
@@ -127,11 +154,7 @@ test_app_gateway_http_listener_deny if {
 					"resources": [{
 						"address": "module.application_gateway.azurerm_application_gateway.network",
 						"type": "azurerm_application_gateway",
-						"values": {
-							"http_listener": [{
-								"protocol": "Http",
-							}],
-						},
+						"values": {"http_listener": [{"protocol": "Http"}]},
 					}],
 				}],
 			},
@@ -141,7 +164,7 @@ test_app_gateway_http_listener_deny if {
 	result == {"module.application_gateway.azurerm_application_gateway.network listener does not use HTTPS"}
 }
 
-test_subnet_default_outbound_access_deny if {
+test_workload_subnet_default_outbound_is_denied if {
 	result := security.deny with input as {
 		"planned_values": {
 			"root_module": {
@@ -149,19 +172,35 @@ test_subnet_default_outbound_access_deny if {
 					"resources": [{
 						"address": "module.networking.azurerm_subnet.subnets[\"web_subnet\"]",
 						"type": "azurerm_subnet",
-						"values": {
-							"default_outbound_access_enabled": true,
-						},
+						"values": {"default_outbound_access_enabled": true},
 					}],
 				}],
 			},
 		},
 	}
 
-	result == {"module.networking.azurerm_subnet.subnets[\"web_subnet\"] subnet has default outbound access enabled set to true"}
+	result == {"module.networking.azurerm_subnet.subnets[\"web_subnet\"] workload subnet must disable default outbound access"}
 }
 
-test_ssh_wildcard_protocol_ranges_and_cidr_deny if {
+test_gateway_managed_subnet_keeps_platform_egress_policy if {
+	result := security.deny with input as {
+		"planned_values": {
+			"root_module": {
+				"child_modules": [{
+					"resources": [{
+						"address": "module.networking.azurerm_subnet.subnets[\"app_gateway\"]",
+						"type": "azurerm_subnet",
+						"values": {"default_outbound_access_enabled": null},
+					}],
+				}],
+			},
+		},
+	}
+
+	count(result) == 0
+}
+
+test_ssh_range_and_wildcard_protocol_are_denied if {
 	result := security.deny with input as {
 		"resource_changes": [{
 			"address": "module.networking.azurerm_network_security_group.web",
@@ -186,7 +225,7 @@ test_ssh_wildcard_protocol_ranges_and_cidr_deny if {
 	}
 }
 
-test_any_source_in_prefix_list_deny if {
+test_any_source_in_prefix_list_is_denied if {
 	result := security.deny with input as {
 		"resource_changes": [{
 			"address": "module.networking.azurerm_network_security_group.web",
@@ -208,7 +247,25 @@ test_any_source_in_prefix_list_deny if {
 	result == {"module.networking.azurerm_network_security_group.web allows inbound access from any source"}
 }
 
-test_compliant_sample_has_no_deny if {
+test_linux_virtual_machine_password_authentication_is_allowed if {
+	result := security.deny with input as {
+		"planned_values": {
+			"root_module": {
+				"child_modules": [{
+					"resources": [{
+						"address": "module.compute.azurerm_linux_virtual_machine.app_vm",
+						"type": "azurerm_linux_virtual_machine",
+						"values": {"disable_password_authentication": true},
+					}],
+				}],
+			},
+		},
+	}
+
+	count(result) == 0
+}
+
+test_compliant_sample_has_no_policy_denials if {
 	result := security.deny with input as {
 		"resource_changes": [
 			{
@@ -255,9 +312,14 @@ test_compliant_sample_has_no_deny if {
 							"values": {"http_listener": [{"protocol": "Https"}]},
 						},
 						{
-							"address": "module.networking.azurerm_subnet.web",
+							"address": "module.networking.azurerm_subnet.subnets[\"web_subnet\"]",
 							"type": "azurerm_subnet",
 							"values": {"default_outbound_access_enabled": false},
+						},
+						{
+							"address": "module.networking.azurerm_subnet.subnets[\"app_gateway\"]",
+							"type": "azurerm_subnet",
+							"values": {"default_outbound_access_enabled": null},
 						},
 					],
 				}],

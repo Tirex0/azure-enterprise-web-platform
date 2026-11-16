@@ -1,36 +1,57 @@
 name: Terraform CI
 
 on:
+  push:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
+
+permissions:
+  contents: read
 
 jobs:
-  terraform:
-    name: Terraform Checks
+  validate:
+    name: Terraform and OPA checks
     runs-on: ubuntu-latest
 
-    env:
-      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
-
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.5"
 
-      - name: Terraform Format Check
-        working-directory: infrastructure
+      - name: Set up OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: "1.22.2"
+
+      - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init
-        working-directory: infrastructure
-        run: terraform init -backend=false
+      - name: Check environment example formatting
+        run: |
+          cp infrastructure/environments/dev.tfvars.example "$RUNNER_TEMP/dev.tfvars"
+          cp infrastructure/environments/prod.tfvars.example "$RUNNER_TEMP/prod.tfvars"
+          terraform fmt -check "$RUNNER_TEMP/dev.tfvars" "$RUNNER_TEMP/prod.tfvars"
+      - name: Initialize infrastructure without remote state
+        run: terraform -chdir=infrastructure init -backend=false -input=false -lockfile=readonly
 
-      - name: Terraform Validate
-        working-directory: infrastructure
-        run: terraform validate
+      - name: Validate infrastructure
+        run: terraform -chdir=infrastructure validate
+
+      - name: Initialize bootstrap without remote state
+        run: terraform -chdir=bootstrap init -backend=false -input=false -lockfile=readonly
+
+      - name: Validate bootstrap
+        run: terraform -chdir=bootstrap validate
+
+      - name: Check Rego formatting
+        run: opa fmt --fail --list infrastructure/policies.rego infrastructure/policy_test.rego
+
+      - name: Test OPA policies
+        run: opa test infrastructure/policies.rego infrastructure/policy_test.rego -v
