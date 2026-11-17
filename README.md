@@ -125,18 +125,22 @@ Copy-Item environments/dev.tfvars.example environments/dev.tfvars
 New-Item -ItemType Directory -Force certs
 ~~~
 
-Place a PFX at infrastructure/certs/app-gateway-01.pfx, then update ssl_certificate_path in your local environments/dev.tfvars to ./certs/app-gateway-01.pfx. A self-signed PFX is suitable for a lab but browsers will not trust it. Do not commit the PFX, its password, or a private key.
+Generate a replacement dev PFX with the helper script. It securely prompts for a new password, validates the exported PFX, updates the local dev.tfvars certificate path, and sets the Terraform password variable in the current PowerShell session:
 
-Set the VM SSH public key and securely prompt for the PFX password in PowerShell:
+~~~powershell
+. ./scripts/New-DevPfxCertificate.ps1
+~~~
+
+The script creates infrastructure/certs/app-gateway-01.pfx. A self-signed certificate is suitable for a lab but browsers will not trust it. Do not commit the PFX, its password, or a private key. Remember the password so you can update the GitHub Actions secret.
+
+Set the VM SSH public key and run the plan:
 
 ~~~powershell
 $env:TF_VAR_ssh_public_key = Get-Content -Raw "$HOME/.ssh/id_ed25519.pub"
-$securePfxPassword = Read-Host -Prompt "PFX password" -AsSecureString
-$env:TF_VAR_ssl_certificate_password = [System.Net.NetworkCredential]::new("", $securePfxPassword).Password
-terraform plan -var-file="environments/dev.tfvars"
+terraform plan -input=false -var-file="environments/dev.tfvars"
 ~~~
 
-A certificate password must match the PFX when Terraform reads it. If the old password is unknown, create a replacement PFX with a password you control; it cannot be recovered from the PFX file.
+The old PFX password cannot be recovered. The helper creates a replacement certificate; update the GitHub Actions PFX and password secrets with the new values before running the CD workflow.
 
 ## GitHub Actions setup
 

@@ -12,7 +12,7 @@ resource "azurerm_subnet" "subnets" {
   virtual_network_name = azurerm_virtual_network.enterprise_web_vnet.name
   resource_group_name  = var.resource_group_name
 
-  default_outbound_access_enabled = each.value.default_outbound_access_enabled
+  default_outbound_access_enabled = each.key == "app_gateway" ? each.value.default_outbound_access_enabled : coalesce(each.value.default_outbound_access_enabled, false)
 }
 
 resource "azurerm_network_security_group" "subnet_nsgs" {
