@@ -48,8 +48,9 @@ There is no separate Azure Load Balancer. The Application Gateway sends requests
 - Azure Monitor Agent and a Data Collection Rule for Linux syslog.
 - Application Gateway diagnostic logs and metrics sent to Log Analytics.
 - Terraform remote state bootstrap using Azure Blob Storage.
-- GitHub Actions CI for formatting, Terraform validation, and OPA tests.
-- GitHub Actions CD that creates a plan on pushes to main and blocks it when OPA finds a policy violation. It does not run terraform apply.
+- GitHub Actions CI for formatting, Terraform validation, and OPA tests, with immutable action pins.
+- GitHub Actions CD that plans and evaluates OPA policies on pushes to main; a manual apply path is protected by environment approval.
+- Dependabot updates for GitHub Actions and Terraform providers.
 
 ## OPA/Rego policies
 
@@ -110,10 +111,10 @@ az login
 $subscriptionId = Read-Host "Azure subscription ID"
 az account set --subscription $subscriptionId
 $stateStorage = "replace-with-bootstrap-output"
-terraform -chdir=infrastructure init -reconfigure -backend-config="resource_group_name=sharedservices-rg" -backend-config="storage_account_name=$stateStorage" -backend-config="container_name=terraform-state" -backend-config="key=dev.terraform.tfstate" -backend-config="subscription_id=$(az account show --query id -o tsv)" -backend-config="use_oidc=true" -backend-config="use_azuread_auth=true"
+terraform -chdir=infrastructure init -reconfigure -backend-config="resource_group_name=sharedservices-rg" -backend-config="storage_account_name=$stateStorage" -backend-config="container_name=terraform-state" -backend-config="key=dev.terraform.tfstate" -backend-config="subscription_id=$(az account show --query id -o tsv)" -backend-config="use_cli=true" -backend-config="use_oidc=false" -backend-config="use_azuread_auth=true"
 ~~~
 
-Azure CLI authentication is available for local Terraform use. GitHub Actions uses OIDC and Azure AD data-plane authentication for the same backend. Grant the deployment identity Storage Blob Data Contributor on the state storage account/container so it can read state and acquire leases, plus the resource-scoped roles needed for the resources Terraform manages. The sample does not create role assignments.
+Local Terraform uses the currently signed-in Azure CLI identity. GitHub Actions uses OIDC with the App Registration's federated credential. Both identities need `Storage Blob Data Contributor` on the `terraform-state` container so Terraform can read state and acquire/release its blob lease. The GitHub identity also needs the resource-scoped roles required for the infrastructure plan. The sample does not create role assignments. Do not use `-lock=false` to work around a held lease. First verify that no local or GitHub Terraform run is active; only then use `terraform force-unlock <LOCK_ID>` with the ID from Terraform's lock error.
 
 ## Prepare and plan a dev deployment
 
@@ -144,17 +145,21 @@ The old PFX password cannot be recovered. The helper creates a replacement certi
 
 ## GitHub Actions setup
 
-The Terraform CI workflow runs on every branch push and on pull requests to main. It performs formatting, initializes both Terraform stacks without a backend, validates them, and runs OPA formatting and unit tests.
+The Terraform CI workflow runs on every branch push and on pull requests to main. It performs formatting, initializes both Terraform stacks without a backend, validates them, and runs OPA formatting and unit tests. The workflows pin GitHub Actions to immutable commit SHAs and use the supported Node 24 action runtimes.
 
-The Terraform CD workflow runs on pushes to main. It runs a dev plan and the OPA plan gate, but does not apply changes. Configure these repository Actions secrets before expecting that workflow to pass:
+The Terraform CD workflow runs a dev plan and OPA policy gate on pushes to main. A deployment is never triggered by a push. To deploy from GitHub Actions, manually run **Terraform CD** on `main` and set its `apply` input to `true`. The apply job waits for approval through the `dev-apply` GitHub Environment, then creates a fresh plan, runs OPA against it, and applies that same plan. To preview without applying, run the workflow with `apply` set to `false` or inspect the plan from the latest push to main. No plan file or plan JSON is uploaded as an artifact because this is a public repository. Configure the `dev-apply` environment with required reviewers under **Settings → Environments**.
 
-- AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_SUBSCRIPTION_ID for an Azure federated identity.
+Configure these repository Actions secrets before expecting the workflow to pass. Azure authentication uses the standard Terraform `ARM_` names:
+
+- ARM_CLIENT_ID, ARM_TENANT_ID, and ARM_SUBSCRIPTION_ID for the Azure App Registration and federated identity.
 - TF_BACKEND_RESOURCE_GROUP and TF_BACKEND_STORAGE_ACCOUNT for the bootstrapped remote state resources.
 - TF_VAR_ssh_public_key with the VM's SSH public key.
 - TF_VAR_ssl_certificate_password with the PFX password.
 - SSL_CERTIFICATE_PFX_BASE64 with the base64-encoded PFX file.
 
-Configure a GitHub Actions OIDC federated credential for the repository and grant the identity the minimum Azure roles needed for the Terraform plan and remote state access. The CD workflow writes its temporary PFX and plan JSON to the hosted runner and removes them at the end; it does not upload plan artifacts.
+Configure GitHub Actions OIDC federated credentials for the App Registration with issuer `https://token.actions.githubusercontent.com` and audience `api://AzureADTokenExchange`. The plan job uses subject `repo:Tirex0/azure-enterprise-web-platform:ref:refs/heads/main`; the approved apply job uses subject `repo:Tirex0/azure-enterprise-web-platform:environment:dev-apply`. These are separate federated credentials. Grant the identity `Storage Blob Data Contributor` on the `terraform-state` container and the Azure roles needed for the plan/apply. OIDC does not need an `ARM_CLIENT_SECRET`; the workflow does not use one. The workflow creates its temporary PFX and plan JSON on the hosted runner and removes them at the end; it does not upload plan JSON.
+
+Protect `main` by requiring the Terraform CI status check before merging. The CD workflow's concurrency group serializes runs against the shared `dev.terraform.tfstate` key; local Terraform runs use the Azure Blob state lock as well. The apply environment's OIDC federated credential must use the exact environment subject documented above.
 
 ## Environment examples and operational limits
 
