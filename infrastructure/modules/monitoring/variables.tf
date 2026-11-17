@@ -1,8 +1,12 @@
-variable "workspace_name" {
+variable "sharedservices_resource_group_name" {
   type        = string
-  description = "Name of the Log Analytics Workspace declared as an input variable for reusability purposes."
+  description = "Resource group where shared monitoring services are deployed."
 }
 
+variable "workspace_name" {
+  type        = string
+  description = "Name of the Log Analytics Workspace."
+}
 
 variable "app_vm_id" {
   type        = string
@@ -12,6 +16,11 @@ variable "app_vm_id" {
 variable "web_vmss_id" {
   type        = string
   description = "Resource ID of the web VMSS."
+}
+
+variable "app_gateway_id" {
+  type        = string
+  description = "Resource ID of the Application Gateway."
 }
 
 variable "environment" {

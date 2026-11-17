@@ -6,7 +6,6 @@ resource "azurerm_public_ip" "app_gw_pip" {
   sku                 = "Standard"
 }
 
-
 resource "azurerm_application_gateway" "network" {
   name                = var.app_gateway_name
   resource_group_name = var.resource_group_name
@@ -32,6 +31,7 @@ resource "azurerm_application_gateway" "network" {
     name                 = local.frontend_ip_configuration_name
     public_ip_address_id = azurerm_public_ip.app_gw_pip.id
   }
+
   ssl_certificate {
     name     = local.ssl_certificate_name
     data     = filebase64(var.ssl_certificate_path)
@@ -69,13 +69,16 @@ resource "azurerm_application_gateway" "network" {
   }
 
   probe {
-    name                = "${var.app_gateway_name}-health-probe"
+    name                = local.health_probe_name
     protocol            = "Http"
     path                = "/health"
+    host                = "127.0.0.1"
     interval            = 30
     timeout             = 30
     unhealthy_threshold = 3
 
-    pick_host_name_from_backend_http_settings = true
+    match {
+      status_code = ["200-399"]
+    }
   }
 }

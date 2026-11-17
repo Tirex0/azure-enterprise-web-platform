@@ -8,13 +8,20 @@
 *.tfstate.*
 errored.tfstate
 
-# Terraform plans (may contain sensitive values)
+# Terraform plans and JSON output (may contain sensitive values)
 *.tfplan
 *.plan
+**/plan*.json
+dev.tfplan
+plan.json
 
 # Variable files can contain environment-specific or secret values
 *.tfvars
 *.tfvars.json
+
+# Local backend configuration
+*.tfbackend
+backend.local.hcl
 
 # Local certificates and private keys
 *.pfx
@@ -23,6 +30,7 @@ errored.tfstate
 *.key
 *.cer
 *.crt
+certs/
 
 # Terraform crash logs
 crash.log

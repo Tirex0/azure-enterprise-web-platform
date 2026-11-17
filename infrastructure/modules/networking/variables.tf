@@ -8,7 +8,6 @@ variable "resource_group_location" {
   description = "Location of the resource group where networking resources will be deployed."
 }
 
-
 variable "vnet_details" {
   type = map(object({
     name          = string
@@ -16,14 +15,13 @@ variable "vnet_details" {
   }))
 }
 
-
 variable "subnet_details" {
   type = map(object({
-    name             = string
-    address_prefixes = list(string)
+    name                            = string
+    address_prefixes                = list(string)
+    default_outbound_access_enabled = optional(bool)
   }))
 }
-
 
 variable "nsg_rules" {
   type = map(map(object({
@@ -38,4 +36,3 @@ variable "nsg_rules" {
     destination_port_range     = string
   })))
 }
-

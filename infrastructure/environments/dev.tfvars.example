@@ -3,11 +3,9 @@ resource_groups = {
     name     = "rg-enterprise-web-network"
     location = "West Europe"
   }
-  public = {
-    name     = "rg-enterprise-web-public"
-    location = "West Europe"
-  }
 }
+
+sharedservices_resource_group_name = "sharedservices-rg"
 
 vnet_details = {
   enterprise_web_vnet = {
@@ -18,12 +16,14 @@ vnet_details = {
 
 subnet_details = {
   web_subnet = {
-    name             = "subnet-web-01"
-    address_prefixes = ["10.0.1.0/24"]
+    name                            = "subnet-web-01"
+    address_prefixes                = ["10.0.1.0/24"]
+    default_outbound_access_enabled = false
   }
   app_subnet = {
-    name             = "subnet-app-01"
-    address_prefixes = ["10.0.2.0/24"]
+    name                            = "subnet-app-01"
+    address_prefixes                = ["10.0.2.0/24"]
+    default_outbound_access_enabled = false
   }
   app_gateway = {
     name             = "subnet-app-gateway-01"
@@ -31,8 +31,19 @@ subnet_details = {
   }
 }
 
+
 nsg_rules = {
-   app_gateway = {
+  app_gateway = {
+    allow_internet_outbound = {
+      priority                   = 105
+      direction                  = "Outbound"
+      access                     = "Allow"
+      protocol                   = "*"
+      source_address_prefix      = "*"
+      source_port_range          = "*"
+      destination_address_prefix = "Internet"
+      destination_port_range     = "*"
+    }
     allow_gateway_manager = {
       priority                   = 105
       direction                  = "Inbound"
@@ -63,7 +74,6 @@ nsg_rules = {
       destination_address_prefix = "*"
       destination_port_range     = "*"
     }
-
     deny_all = {
       priority                   = 120
       direction                  = "Inbound"
@@ -75,6 +85,7 @@ nsg_rules = {
       destination_port_range     = "*"
     }
   }
+
   web_subnet = {
     allow_app_gateway = {
       priority                   = 110

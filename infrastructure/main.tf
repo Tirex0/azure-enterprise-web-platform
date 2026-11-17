@@ -4,7 +4,6 @@ module "resource_groups" {
   resource_groups = var.resource_groups
 }
 
-
 module "networking" {
   source = "./modules/networking"
 
@@ -15,7 +14,6 @@ module "networking" {
   subnet_details = var.subnet_details
   nsg_rules      = var.nsg_rules
 }
-
 
 module "compute" {
   source = "./modules/compute"
@@ -29,11 +27,12 @@ module "compute" {
   app_vm         = var.app_vm
   web_vmss       = var.web_vmss
   ssh_public_key = var.ssh_public_key
+  environment    = var.environment
+
   application_gateway_backend_address_pool_ids = [
     module.application_gateway.backend_address_pool_id
   ]
 }
-
 
 module "application_gateway" {
   source = "./modules/application_gateway"
@@ -49,9 +48,12 @@ module "application_gateway" {
 }
 
 module "monitoring" {
-  source         = "./modules/monitoring"
-  workspace_name = var.workspace_name
-  app_vm_id      = module.compute.app_vm_id
-  web_vmss_id    = module.compute.web_vmss_id
-  environment    = var.environment
+  source = "./modules/monitoring"
+
+  sharedservices_resource_group_name = var.sharedservices_resource_group_name
+  workspace_name                     = var.workspace_name
+  app_vm_id                          = module.compute.app_vm_id
+  web_vmss_id                        = module.compute.web_vmss_id
+  app_gateway_id                     = module.application_gateway.app_gateway_id
+  environment                        = var.environment
 }

@@ -1,54 +1,183 @@
-**1. Project Overview**
+# Azure Enterprise Web Platform
 
-  The project focuses on building a small-scale enterprise web application platform on Microsoft Azure, with an emphasis on security, scalability, maintainability, and Infrastructure as Code.
-  The infrastructure is built with Terraform using reusable modules for networking, compute, Application Gateway, monitoring, and resource groups. The platform is separated into Web and Application tiers, with Azure Application Gateway serving as the single public entry point.
-  The project supports separate Dev and Prod environments and uses a dedicated Terraform bootstrap configuration to establish the remote state infrastructure. GitHub Actions is integrated to automate Terraform validation and planning, while GitHub OIDC is used for secure authentication to Azure.
+A portfolio project for Azure infrastructure, Terraform, GitHub Actions CI/CD, Linux administration, networking, monitoring, and OPA/Rego policy as code.
 
-**2. Architecture**
+This is a learning/reference environment, not a production-ready landing zone. The application tier is one VM, the Application Gateway uses Standard_v2 without WAF, and the sample does not configure DNS, private endpoints, Key Vault certificate delivery, or zone-redundant recovery.
 
-  The platform follows a layered architecture where external traffic enters through a single public Application Gateway and is then routed to private backend components.
-  The Application Gateway terminates incoming HTTPS traffic on port 443 and forwards requests to the Web tier over HTTP/80. The Web tier runs on an Azure Virtual Machine Scale Set, with NGINX configured as a reverse proxy. Requests are then forwarded to the private Application VM.
-  The Application VM does not have a public IP address and can only receive traffic from the Web tier. The infrastructure uses dedicated subnets for the Application Gateway, Web tier, and Application tier.
-  This design provides a clear separation between the public entry point and the backend application components while allowing the Web tier to scale independently.
+## Architecture
+
+~~~text
+Internet
+  |
+  | HTTPS :443
+  v
+Azure Application Gateway (Standard_v2, public IP, TLS termination)
+  |
+  | HTTP :80, custom /health probe
+  v
+Web VM Scale Set (NGINX reverse proxy)
+  |
+  | HTTP :80
+  v
+Application VM (NGINX sample page and /health endpoint)
+
+Web and app subnets -- NAT Gateway --> Internet egress
+Application Gateway, VM/VMSS logs, and metrics --> Azure Monitor / Log Analytics
+Terraform state --> private Azure Blob Storage container with Azure AD/OIDC auth
+~~~
 
 ![Azure Enterprise Web Platform Architecture](./Infrastructure_Diagram.png)
 
-**3. Infrastructure**
-   
-  The Azure infrastructure consists of an Application Gateway, Virtual Machine Scale Set, private Application VM, Virtual Network, dedicated subnets, and Network Security Groups.
-  The Web tier uses a Virtual Machine Scale Set to support multiple instances behind the Application Gateway. The number of instances and scaling limits are configurable per environment.
-  The Application tier currently uses a single private Ubuntu VM because it is expected to handle a lower level of traffic. The Terraform configuration and variables are structured so that additional application instances can be introduced without redesigning the infrastructure.
-  Network Security Groups control communication between the different layers. Internet traffic is allowed to the Application Gateway over HTTPS/443, while the Web and Application subnets only allow the internal traffic required for communication between the application tiers.
-  All compute resources use Ubuntu Linux. The machines are automatically configured during deployment using cloud-init. NGINX is used as a reverse proxy on the Web tier and as the application-facing web server on the Application VM.
+There is no separate Azure Load Balancer. The Application Gateway sends requests directly to the VM Scale Set backend pool. NGINX on each web instance then proxies requests to the private application VM.
 
-**4. Terraform**
-   
-  Terraform is used as the main Infrastructure as Code solution. The configuration is organized into reusable modules for resource groups, networking, compute, Application Gateway, and monitoring.
-  A separate bootstrap configuration creates the resources required for Terraform remote state management. This includes a dedicated Shared Services resource group, Azure Storage Account, and private Blob Storage container.
-  The main infrastructure uses the Storage Account as its remote Terraform backend. Dev and Prod use separate state keys:
-  dev.terraform.tfstate
-  prod.terraform.tfstate
-  The same Terraform codebase is reused for both environments, while environment-specific values are provided through separate .tfvars files.
+### Network rules
 
-**5. Monitoring**
-   
-  Monitoring is implemented using Azure Monitor components to provide visibility into the compute resources and application delivery layer.
-  Azure Monitor Agent is deployed to the Application VM and Virtual Machine Scale Set instances, while Data Collection Rules define the telemetry and operating system logs collected from the machines. The collected data is stored in Log Analytics Workspaces.
-  Application Gateway monitoring is handled through Azure Monitor metrics and logs, providing additional visibility into application traffic and gateway health.
+- Internet clients reach the Application Gateway over HTTPS on port 443.
+- The GatewayManager service tag is allowed to the Application Gateway subnet on TCP 65200-65535, and the AzureLoadBalancer service tag is allowed for platform health traffic.
+- Application Gateway has an explicit outbound Internet rule required by its subnet configuration.
+- Only Application Gateway subnet addresses can reach the web subnet on HTTP port 80.
+- Only web subnet addresses can reach the application subnet on HTTP port 80.
+- The subnet NSGs deny unmatched inbound traffic.
+- The web and app subnets disable default outbound access and use a Standard NAT Gateway for explicit outbound connectivity. The dedicated Application Gateway subnet is excluded from that workload-subnet policy and retains its required platform connectivity.
 
-**6. CI/CD**
+## What is implemented
 
-  The project is maintained in GitHub and follows a feature branch and Pull Request based development workflow. Changes are developed on a feature branch and merged into the main branch after validation.
-  GitHub Actions is used to automate Terraform validation and planning. The CI workflow performs formatting, initialization, and validation checks, while the CD workflow authenticates to Azure, initializes the remote backend, prepares the required environment configuration, and executes a Terraform plan.
-  The CD workflow currently performs a plan rather than an automatic apply, allowing infrastructure changes to be reviewed before deployment.
-  Azure authentication is handled through GitHub Actions OIDC and Microsoft Entra ID, avoiding the need for a long-lived Azure client secret in GitHub. Sensitive configuration is stored using GitHub Actions Secrets and is excluded from the repository.
+- Terraform modules for resource groups, VNet/subnets/NSGs, compute, Application Gateway, and monitoring.
+- Separate example variable files for dev and prod.
+- Linux VM and VM Scale Set provisioning with cloud-init and SSH public-key authentication.
+- CPU autoscaling for the web VMSS (scale out above 70%, scale in below 30%).
+- A custom Application Gateway probe for /health, using host 127.0.0.1 for the single-site NGINX backend.
+- Azure Monitor Agent and a Data Collection Rule for Linux syslog.
+- Application Gateway diagnostic logs and metrics sent to Log Analytics.
+- Terraform remote state bootstrap using Azure Blob Storage.
+- GitHub Actions CI for formatting, Terraform validation, and OPA tests, with immutable action pins.
+- GitHub Actions CD that plans and evaluates OPA policies on pushes to main; a manual apply path is protected by environment approval.
+- Dependabot updates for GitHub Actions and Terraform providers.
 
-**7. Deployment**
-   
-The infrastructure can be managed locally using Terraform.
-For example, the Dev environment can be initialized and planned with:
-terraform init -reconfigure -backend-config="key=dev.terraform.tfstate"
-terraform plan -var-file="environments/dev.tfvars"
-The infrastructure can then be applied with:
-terraform apply -var-file="environments/dev.tfvars"
-The same approach can be used for Prod by using the corresponding state key and variable file.
+## OPA/Rego policies
+
+The policies in infrastructure/policies.rego evaluate Terraform plan JSON and currently enforce:
+
+- Standard SKU for public IP addresses.
+- No inbound SSH from the Internet.
+- No inbound NSG allow rule from any source (*, 0.0.0.0/0, or ::/0).
+- SSH rules are detected across TCP or wildcard protocol, single ports and port ranges, and single or list source fields.
+- SSH-key-only authentication on Linux VMs and VM Scale Sets.
+- Disabled public internet query access and more than 30 days of Log Analytics retention.
+- HTTPS for Application Gateway listeners.
+- Disabled default outbound access for workload subnets. The managed Application Gateway subnet is exempt because it has service-managed connectivity requirements.
+
+Run the unit tests and format check from the repository root:
+
+~~~powershell
+opa fmt --fail infrastructure/policies.rego infrastructure/policy_test.rego
+opa test infrastructure/policies.rego infrastructure/policy_test.rego -v
+~~~
+
+To evaluate a plan locally, create a saved plan and convert it to JSON. Terraform plan files and plan JSON can contain sensitive data, so keep them local and do not upload or commit them:
+
+~~~powershell
+Set-Location infrastructure
+terraform plan -out=dev.tfplan -var-file="environments/dev.tfvars"
+$planJson = terraform show -json dev.tfplan
+[IO.File]::WriteAllText("plan.json", $planJson, [Text.UTF8Encoding]::new($false))
+opa eval --fail-defined --format pretty --data policies.rego --input plan.json 'data.terraform.security.deny[_]'
+~~~
+
+A policy violation makes OPA exit with a non-zero status. Delete the local plan JSON after review.
+
+## Prerequisites
+
+- Terraform 1.15.5 (the CI version) or a compatible newer version.
+- Azure CLI and an Azure subscription with permissions to create the resources in the examples.
+- OPA 1.22.2 (the CI version).
+- OpenSSL or another tool that can create a PFX certificate.
+- An SSH key pair. Only the public key is provided to Terraform.
+
+Azure Application Gateway v2 and NAT Gateway incur hourly and data-processing charges. VM/VMSS, public IP, and Log Analytics ingestion/retention also incur charges. Review the Azure pricing for your region before deploying. A terraform plan does not create billable Azure resources; terraform apply does.
+
+## Bootstrap the shared state resources
+
+The bootstrap stack creates the shared services resource group, a storage account with a unique suffix, and a private container for Terraform state. Run it once per subscription. The bootstrap stack itself uses local state; keep that state file secure and backed up.
+
+~~~powershell
+terraform -chdir=bootstrap init
+terraform -chdir=bootstrap apply -var="sharedservices_resource_group_name=sharedservices-rg" -var="sharedservices_resource_group_location=West Europe"
+terraform -chdir=bootstrap output -raw storage_account_name
+~~~
+
+Use the storage account name from the last command when initializing the infrastructure stack. Log in to Azure and select the intended subscription:
+
+~~~powershell
+az login
+$subscriptionId = Read-Host "Azure subscription ID"
+az account set --subscription $subscriptionId
+$stateStorage = "replace-with-bootstrap-output"
+terraform -chdir=infrastructure init -reconfigure -backend-config="resource_group_name=sharedservices-rg" -backend-config="storage_account_name=$stateStorage" -backend-config="container_name=terraform-state" -backend-config="key=dev.terraform.tfstate" -backend-config="subscription_id=$(az account show --query id -o tsv)" -backend-config="use_cli=true" -backend-config="use_oidc=false" -backend-config="use_azuread_auth=true"
+~~~
+
+Local Terraform uses the currently signed-in Azure CLI identity. GitHub Actions uses OIDC with the App Registration's federated credential. Both identities need `Storage Blob Data Contributor` on the `terraform-state` container so Terraform can read state and acquire/release its blob lease. The GitHub identity also needs the resource-scoped roles required for the infrastructure plan. The sample does not create role assignments. Do not use `-lock=false` to work around a held lease. First verify that no local or GitHub Terraform run is active; only then use `terraform force-unlock <LOCK_ID>` with the ID from Terraform's lock error.
+
+## Prepare and plan a dev deployment
+
+Copy the example file to a local variable file. The repository ignores real tfvars files and certificates. The root Terraform variable defaults to sharedservices-rg for compatibility with older local variable files; set sharedservices_resource_group_name explicitly if your shared services resource group uses another name.
+
+~~~powershell
+Set-Location infrastructure
+Copy-Item environments/dev.tfvars.example environments/dev.tfvars
+New-Item -ItemType Directory -Force certs
+~~~
+
+Generate a replacement dev PFX with the helper script. It securely prompts for a new password, validates the exported PFX, updates the local dev.tfvars certificate path, and sets the Terraform password variable in the current PowerShell session:
+
+~~~powershell
+. ./scripts/New-DevPfxCertificate.ps1
+~~~
+
+The script creates infrastructure/certs/app-gateway-01.pfx. A self-signed certificate is suitable for a lab but browsers will not trust it. Do not commit the PFX, its password, or a private key. Remember the password so you can update the GitHub Actions secret.
+
+Set the VM SSH public key and run the plan:
+
+~~~powershell
+$env:TF_VAR_ssh_public_key = Get-Content -Raw "$HOME/.ssh/id_ed25519.pub"
+terraform plan -input=false -var-file="environments/dev.tfvars"
+~~~
+
+The old PFX password cannot be recovered. The helper creates a replacement certificate; update the GitHub Actions PFX and password secrets with the new values before running the CD workflow.
+
+## GitHub Actions setup
+
+The Terraform CI workflow runs on every branch push and on pull requests to main. It performs formatting, initializes both Terraform stacks without a backend, validates them, and runs OPA formatting and unit tests. The workflows pin GitHub Actions to immutable commit SHAs and use the supported Node 24 action runtimes.
+
+The Terraform CD workflow runs a dev plan and OPA policy gate on pushes to main. A deployment is never triggered by a push. To deploy from GitHub Actions, manually run **Terraform CD** on `main` and set its `apply` input to `true`. On a manual apply run, the plan job first creates a plan preview and evaluates OPA. The apply job then waits for approval through the `dev-apply` GitHub Environment, creates a fresh plan, evaluates OPA again, and applies that exact saved plan. The approval authorizes the apply job; it is not bound to the exact plan that the job creates after approval. The plan preview is available in the workflow logs, but no plan artifact is passed between jobs or uploaded because this is a public repository. To preview without applying, run the workflow with `apply` set to `false` or inspect the plan from the latest push to main. Configure the `dev-apply` environment with required reviewers under **Settings → Environments**.
+
+Configure these repository Actions secrets before expecting the workflow to pass. Azure authentication uses the standard Terraform `ARM_` names:
+
+- ARM_CLIENT_ID, ARM_TENANT_ID, and ARM_SUBSCRIPTION_ID for the Azure App Registration and federated identity.
+- TF_BACKEND_RESOURCE_GROUP and TF_BACKEND_STORAGE_ACCOUNT for the bootstrapped remote state resources.
+- TF_VAR_ssh_public_key with the VM's SSH public key.
+- TF_VAR_ssl_certificate_password with the PFX password.
+- SSL_CERTIFICATE_PFX_BASE64 with the base64-encoded PFX file.
+
+Configure GitHub Actions OIDC federated credentials for the App Registration with issuer `https://token.actions.githubusercontent.com` and audience `api://AzureADTokenExchange`. The plan job uses subject `repo:Tirex0/azure-enterprise-web-platform:ref:refs/heads/main`; the approved apply job uses subject `repo:Tirex0/azure-enterprise-web-platform:environment:dev-apply`. These are separate federated credentials. Grant the identity `Storage Blob Data Contributor` on the `terraform-state` container and the Azure roles needed for the plan/apply. OIDC does not need an `ARM_CLIENT_SECRET`; the workflow does not use one. The workflow creates its temporary PFX and plan JSON on the hosted runner and removes them at the end; it does not upload plan JSON.
+
+Protect `main` by requiring the Terraform CI status check before merging. The CD workflow's concurrency group serializes runs against the shared `dev.terraform.tfstate` key; local Terraform runs use the Azure Blob state lock as well. The apply environment's OIDC federated credential must use the exact environment subject documented above.
+
+## Environment examples and operational limits
+
+- Change resource names, region, workspace name, SSH key, and certificate path to match your subscription. Log Analytics workspace names must be available in the selected region.
+- The prod example keeps a single application VM, so that tier remains a single point of failure even though the web tier scales from two to five instances. Use a separate state key such as prod.terraform.tfstate when initializing the prod environment; the GitHub CD workflow is intentionally dev-only.
+- Standard_v2 does not include the Web Application Firewall. Use WAF_v2 and configure its policy before treating the gateway as an internet-facing production security boundary.
+- The certificate is loaded from a local file into Terraform. For production, deliver and rotate certificates with Key Vault integration and avoid storing certificate material in Terraform plans.
+- The sample uses HTTP between the gateway, reverse proxy, and application VM inside the VNet. Add backend TLS and stronger host, OS, patching, and application controls for production.
+- Log Analytics internet query access is disabled by policy. If your operational model requires public workspace queries, change that control deliberately and update the Rego policy rather than silently weakening the gate.
+- The sample monitoring DCR collects all Linux syslog facilities and levels. Tune collection and retention for your workload and cost target.
+
+## Repository layout
+
+- bootstrap/: shared state resource bootstrap.
+- infrastructure/: reusable Terraform root, modules, environment examples, and policy code.
+- infrastructure/policies.rego: OPA policies.
+- infrastructure/policy_test.rego: OPA unit tests.
+- .github/workflows/terraform.yml: CI checks.
+- .github/workflows/terraform-cd.yml: OIDC-authenticated dev plan and policy gate.
