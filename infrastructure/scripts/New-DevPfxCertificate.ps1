@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$infrastructurePath = $PSScriptRoot
+$infrastructurePath = Split-Path -Parent $PSScriptRoot
 $certDirectory = Join-Path $infrastructurePath "certs"
 $pfxPath = Join-Path $certDirectory "app-gateway-01.pfx"
 $devTfvarsPath = Join-Path $infrastructurePath "environments/dev.tfvars"
