@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: Apply the reviewed dev plan after environment approval
+        description: Apply a fresh dev plan after environment approval
         required: true
         type: boolean
         default: false
@@ -46,6 +46,7 @@ jobs:
 
       - name: Test OPA policies
         run: opa test infrastructure/policies.rego infrastructure/policy_test.rego -v
+
 
       - name: Azure Login
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
@@ -120,7 +121,7 @@ jobs:
           rmdir infrastructure/certs 2>/dev/null || true
 
   apply:
-    name: Apply approved dev plan
+    name: Apply dev plan after environment approval
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply }}
     needs: plan
     runs-on: ubuntu-24.04
@@ -139,6 +140,11 @@ jobs:
         with:
           terraform_version: "1.15.5"
           terraform_wrapper: false
+
+      - name: Set up OPA
+        uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1
+        with:
+          version: "1.22.2"
 
       - name: Azure Login
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906

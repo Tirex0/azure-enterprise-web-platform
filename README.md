@@ -26,6 +26,8 @@ Application Gateway, VM/VMSS logs, and metrics --> Azure Monitor / Log Analytics
 Terraform state --> private Azure Blob Storage container with Azure AD/OIDC auth
 ~~~
 
+![Azure Enterprise Web Platform Architecture](./Infrastructure_Diagram.png)
+
 There is no separate Azure Load Balancer. The Application Gateway sends requests directly to the VM Scale Set backend pool. NGINX on each web instance then proxies requests to the private application VM.
 
 ### Network rules
@@ -147,7 +149,7 @@ The old PFX password cannot be recovered. The helper creates a replacement certi
 
 The Terraform CI workflow runs on every branch push and on pull requests to main. It performs formatting, initializes both Terraform stacks without a backend, validates them, and runs OPA formatting and unit tests. The workflows pin GitHub Actions to immutable commit SHAs and use the supported Node 24 action runtimes.
 
-The Terraform CD workflow runs a dev plan and OPA policy gate on pushes to main. A deployment is never triggered by a push. To deploy from GitHub Actions, manually run **Terraform CD** on `main` and set its `apply` input to `true`. The apply job waits for approval through the `dev-apply` GitHub Environment, then creates a fresh plan, runs OPA against it, and applies that same plan. To preview without applying, run the workflow with `apply` set to `false` or inspect the plan from the latest push to main. No plan file or plan JSON is uploaded as an artifact because this is a public repository. Configure the `dev-apply` environment with required reviewers under **Settings → Environments**.
+The Terraform CD workflow runs a dev plan and OPA policy gate on pushes to main. A deployment is never triggered by a push. To deploy from GitHub Actions, manually run **Terraform CD** on `main` and set its `apply` input to `true`. The apply job waits for approval through the `dev-apply` GitHub Environment before it creates a fresh plan, runs OPA against it, and applies that same plan. The environment approval authorizes the deployment run; it does not review a plan created before approval. To preview without applying, run the workflow with `apply` set to `false` or inspect the plan from the latest push to main. No plan file or plan JSON is uploaded as an artifact because this is a public repository. Configure the `dev-apply` environment with required reviewers under **Settings → Environments**.
 
 Configure these repository Actions secrets before expecting the workflow to pass. Azure authentication uses the standard Terraform `ARM_` names:
 
