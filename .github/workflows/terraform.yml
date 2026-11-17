@@ -56,3 +56,105 @@ jobs:
 
       - name: Test OPA policies
         run: opa test infrastructure/policies.rego infrastructure/policy_test.rego -v
+  pr_plan:
+    name: Terraform plan and OPA policy gate (PR)
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-dev-state
+      cancel-in-progress: false
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_PLAN_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_BACKEND_RESOURCE_GROUP: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }}
+      TF_BACKEND_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}
+      TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+        with:
+          terraform_version: "1.15.5"
+          terraform_wrapper: false
+
+      - name: Set up OPA
+        uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1
+        with:
+          version: "1.22.2"
+
+      - name: Azure Login with read-only PR identity
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ secrets.ARM_PLAN_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Initialize Terraform remote state
+        working-directory: infrastructure
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="resource_group_name=$TF_BACKEND_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
+            -backend-config="container_name=terraform-state" \
+            -backend-config="key=dev.terraform.tfstate" \
+            -backend-config="subscription_id=$ARM_SUBSCRIPTION_ID" \
+            -backend-config="tenant_id=$ARM_TENANT_ID" \
+            -backend-config="client_id=$ARM_CLIENT_ID" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Prepare dev variables and certificate
+        working-directory: infrastructure
+        env:
+          PFX_BASE64: ${{ secrets.SSL_CERTIFICATE_PFX_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PFX_BASE64"
+          test -n "$TF_VAR_ssl_certificate_password"
+          test -n "$TF_VAR_ssh_public_key"
+          cp environments/dev.tfvars.example environments/dev.tfvars
+          mkdir -p certs
+          printf '%s' "$PFX_BASE64" | base64 --decode > certs/app-gateway-01.pfx
+          openssl pkcs12 -in certs/app-gateway-01.pfx -noout -passin env:TF_VAR_ssl_certificate_password
+          sed -i 's#./certs/REPLACE_WITH_LOCAL_PFX.pfx#./certs/app-gateway-01.pfx#' environments/dev.tfvars
+          echo "This plan is for validation only and must not be applied." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create saved Terraform plan
+        working-directory: infrastructure
+        run: |
+          set -euo pipefail
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="environments/dev.tfvars" \
+            -out="$RUNNER_TEMP/pr.tfplan"
+          terraform show -json "$RUNNER_TEMP/pr.tfplan" > "$RUNNER_TEMP/pr.tfplan.json"
+
+      - name: Evaluate Terraform plan policies
+        working-directory: infrastructure
+        run: |
+          opa eval --fail-defined --format pretty \
+            --data policies.rego \
+            --input "$RUNNER_TEMP/pr.tfplan.json" \
+            'data.terraform.security.deny[_]'
+          echo "OPA policy gate passed for this pull request."
+
+      - name: Remove temporary plan and certificate
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/pr.tfplan" "$RUNNER_TEMP/pr.tfplan.json"
+          rm -f infrastructure/environments/dev.tfvars
+          rm -f infrastructure/certs/app-gateway-01.pfx
+          rmdir infrastructure/certs 2>/dev/null || true
