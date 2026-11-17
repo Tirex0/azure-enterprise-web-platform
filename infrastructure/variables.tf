@@ -9,6 +9,7 @@ variable "resource_groups" {
 variable "sharedservices_resource_group_name" {
   description = "Existing resource group for shared monitoring services."
   type        = string
+  default     = "sharedservices-rg"
 }
 
 variable "vnet_details" {

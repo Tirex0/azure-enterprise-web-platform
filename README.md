@@ -117,7 +117,7 @@ Azure CLI authentication is available for local Terraform use. GitHub Actions us
 
 ## Prepare and plan a dev deployment
 
-Copy the example file to a local variable file. The repository ignores real tfvars files and certificates.
+Copy the example file to a local variable file. The repository ignores real tfvars files and certificates. The root Terraform variable defaults to sharedservices-rg for compatibility with older local variable files; set sharedservices_resource_group_name explicitly if your shared services resource group uses another name.
 
 ~~~powershell
 Set-Location infrastructure
