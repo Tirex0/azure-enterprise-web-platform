@@ -70,14 +70,14 @@ jobs:
       cancel-in-progress: false
     env:
       ARM_CLIENT_ID: ${{ secrets.ARM_PLAN_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
-      TF_BACKEND_RESOURCE_GROUP: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }}
-      TF_BACKEND_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}
-      TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
-      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
+      TF_BACKEND_RESOURCE_GROUP: ${{ vars.TF_BACKEND_RESOURCE_GROUP }}
+      TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.TF_BACKEND_STORAGE_ACCOUNT }}
+      TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
+      TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
 
     steps:
       - name: Check out repository
@@ -96,12 +96,12 @@ jobs:
         with:
           version: "1.22.2"
 
-      - name: Azure Login with read-only PR identity
+      - name: Azure Login with limited-scope PR identity
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
           client-id: ${{ secrets.ARM_PLAN_CLIENT_ID }}
-          tenant-id: ${{ secrets.ARM_TENANT_ID }}
-          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Initialize Terraform remote state
         working-directory: infrastructure

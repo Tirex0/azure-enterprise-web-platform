@@ -51,18 +51,18 @@ jobs:
       - name: Azure Login
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
-          client-id: ${{ secrets.ARM_CLIENT_ID }}
-          tenant-id: ${{ secrets.ARM_TENANT_ID }}
-          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Initialize Terraform remote state
         working-directory: infrastructure
         env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          TF_BACKEND_RESOURCE_GROUP: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }}
-          TF_BACKEND_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TF_BACKEND_RESOURCE_GROUP: ${{ vars.TF_BACKEND_RESOURCE_GROUP }}
+          TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.TF_BACKEND_STORAGE_ACCOUNT }}
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="resource_group_name=$TF_BACKEND_RESOURCE_GROUP" \
@@ -79,7 +79,7 @@ jobs:
         working-directory: infrastructure
         env:
           PFX_BASE64: ${{ secrets.SSL_CERTIFICATE_PFX_BASE64 }}
-          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$PFX_BASE64"
@@ -93,8 +93,8 @@ jobs:
       - name: Create saved Terraform plan
         working-directory: infrastructure
         env:
-          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
-          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$TF_VAR_ssh_public_key"
@@ -149,18 +149,18 @@ jobs:
       - name: Azure Login
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
         with:
-          client-id: ${{ secrets.ARM_CLIENT_ID }}
-          tenant-id: ${{ secrets.ARM_TENANT_ID }}
-          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Initialize Terraform remote state
         working-directory: infrastructure
         env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          TF_BACKEND_RESOURCE_GROUP: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }}
-          TF_BACKEND_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TF_BACKEND_RESOURCE_GROUP: ${{ vars.TF_BACKEND_RESOURCE_GROUP }}
+          TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.TF_BACKEND_STORAGE_ACCOUNT }}
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="resource_group_name=$TF_BACKEND_RESOURCE_GROUP" \
@@ -177,7 +177,7 @@ jobs:
         working-directory: infrastructure
         env:
           PFX_BASE64: ${{ secrets.SSL_CERTIFICATE_PFX_BASE64 }}
-          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$PFX_BASE64"
@@ -191,8 +191,8 @@ jobs:
       - name: Create and evaluate approved Terraform plan
         working-directory: infrastructure
         env:
-          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
-          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$TF_VAR_ssh_public_key"
@@ -209,8 +209,8 @@ jobs:
       - name: Apply saved Terraform plan
         working-directory: infrastructure
         env:
-          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_ssh_public_key }}
-          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_ssl_certificate_password }}
+          TF_VAR_ssh_public_key: ${{ secrets.TF_VAR_SSH_PUBLIC_KEY }}
+          TF_VAR_ssl_certificate_password: ${{ secrets.TF_VAR_SSL_CERTIFICATE_PASSWORD }}
         run: terraform apply -input=false -auto-approve "$RUNNER_TEMP/dev.tfplan"
 
       - name: Remove temporary plan and certificate
