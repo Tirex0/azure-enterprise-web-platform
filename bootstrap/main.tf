@@ -10,11 +10,12 @@ resource "random_string" "sharedservicesStorageSuffix" {
 }
 
 resource "azurerm_storage_account" "sharedservicesStorage" {
-  name                     = "tfstate${random_string.sharedservicesStorageSuffix.result}"
-  resource_group_name      = azurerm_resource_group.sharedservicesRG.name
-  location                 = azurerm_resource_group.sharedservicesRG.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+  name                      = "tfstate${random_string.sharedservicesStorageSuffix.result}"
+  resource_group_name       = azurerm_resource_group.sharedservicesRG.name
+  location                  = azurerm_resource_group.sharedservicesRG.location
+  account_tier              = "Standard"
+  account_replication_type  = "LRS"
+  shared_access_key_enabled = false
 }
 
 resource "azurerm_storage_container" "terraform_state" {
